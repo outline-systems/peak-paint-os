@@ -15,30 +15,21 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect modular Settings template tokens
+      - name: Inspect Settings render binding anchors
         shell: bash
         run: |
           curl -fsSL https://raw.githubusercontent.com/outline-systems/baywide-dingos-os/main/index.html -o /tmp/baywide.html
           python3 <<'PY'
           from pathlib import Path
           import re
-          bay=Path('/tmp/baywide.html').read_text(errors='ignore')
-          # Find the hqSettings block containing modular Settings and its following isHQ block.
-          marker='Company details &amp; document template'
-          p=bay.find(marker)
-          st=bay.rfind('<sc-if value=\\"{{ hqSettings }}\\">',0,p)
-          if st<0: st=bay.rfind('<sc-if value="{{ hqSettings }}">',0,p)
-          candidates=[]
-          for needle in ['<sc-if value=\\"{{ isHQ }}\\">','<sc-if value="{{ isHQ }}">']:
-              e=bay.find(needle,p)
-              if e>=0:candidates.append(e)
-          en=min(candidates) if candidates else -1
-          block=bay[st:en]
-          print('START',st,'END',en,'LEN',len(block))
-          vals=sorted(set(re.findall(r'\{\{\s*([A-Za-z_$][\w$]*)\s*\}\}',block)))
-          fors=sorted(set(re.findall(r'<sc-for each=\\?"\{\{\s*([A-Za-z_$][\w$]*)\s*\}\}',block)))
-          print('TOP_TOKENS',vals)
-          print('LOOPS',fors)
-          print('BLOCK_BEGIN\n',block[:35000])
-          print('\nBLOCK_END\n',block[-12000:])
+          for label,path in [('BAY','/tmp/baywide.html'),('PEAK','index.html')]:
+              t=Path(path).read_text(errors='ignore')
+              print('\n===== '+label+' =====')
+              # Find likely render bindings after JS state declaration.
+              for pat in ['coEdit:', 'coLogoMsg:', 'hqTaskWhoOpts:', 'crewRows:', 'gcalClientIdV:', 'brandColor:', 'cornerOpts:', 'binRows:', 'planFilesView:']:
+                  pos=[m.start() for m in re.finditer(re.escape(pat),t)]
+                  print('\nPAT',pat,'LAST',pos[-4:])
+                  for p in pos[-2:]:
+                      print('--- pos',p,'---')
+                      print(t[max(0,p-900):min(len(t),p+2600)])
           PY
