@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect Settings render binding anchors
+      - name: Inspect Settings state and draft behavior
         shell: bash
         run: |
           curl -fsSL https://raw.githubusercontent.com/outline-systems/baywide-dingos-os/main/index.html -o /tmp/baywide.html
@@ -25,11 +25,8 @@ jobs:
           for label,path in [('BAY','/tmp/baywide.html'),('PEAK','index.html')]:
               t=Path(path).read_text(errors='ignore')
               print('\n===== '+label+' =====')
-              # Find likely render bindings after JS state declaration.
-              for pat in ['coEdit:', 'coLogoMsg:', 'hqTaskWhoOpts:', 'crewRows:', 'gcalClientIdV:', 'brandColor:', 'cornerOpts:', 'binRows:', 'planFilesView:']:
-                  pos=[m.start() for m in re.finditer(re.escape(pat),t)]
-                  print('\nPAT',pat,'LAST',pos[-4:])
-                  for p in pos[-2:]:
-                      print('--- pos',p,'---')
-                      print(t[max(0,p-900):min(len(t),p+2600)])
+              for pat in ['coF =', 'const coF', 'let coF', 'var coF', "co: { name:", 'co: {name:', 'coDraft:', "theme: 'dark'", '__syncKeys()', '__mergeState(']:
+                  ps=[m.start() for m in re.finditer(re.escape(pat),t)]
+                  print('\nPAT',repr(pat),ps[-6:])
+                  for p in ps[-2:]: print(t[max(0,p-1800):min(len(t),p+4000)])
           PY
