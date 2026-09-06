@@ -1,0 +1,59 @@
+name: Live Settings QA
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/live-settings-qa.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser QA
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+      - name: Verify published Peak Settings
+        run: |
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const page=await browser.newPage({viewport:{width:1440,height:1100}});
+            const errors=[]; page.on('pageerror',e=>errors.push(String(e)));
+            await page.goto('https://outline-systems.github.io/peak-paint-os/?settingsqa=20260907',{waitUntil:'networkidle',timeout:60000});
+            let mg=page.getByRole('button',{name:/Management/i}); if(await mg.count()) await mg.first().click({force:true});
+            await page.waitForTimeout(500);
+            let settings=page.getByRole('button',{name:'Settings',exact:true}); if(!await settings.count()) throw new Error('Settings navigation missing');
+            await settings.first().click({force:true}); await page.waitForTimeout(700);
+            let body=await page.locator('body').innerText();
+            for(const t of ['Company details & document template','Crew & employees','Integrations','Look & feel','Recently deleted']) if(!body.includes(t)) throw new Error('Missing modular Settings section: '+t);
+            const open=async(name)=>{const s=page.locator('summary:visible').filter({hasText:name}); if(!await s.count()) throw new Error('Missing Settings accordion '+name); await s.first().click({force:true}); await page.waitForTimeout(250);};
+            await open('Company details & document template'); body=await page.locator('body').innerText(); for(const t of ['Company logo','Tender H&S policy','Save company details']) if(!body.includes(t)) throw new Error('Company Details missing '+t);
+            if(!await page.locator('input[type=file]:visible').count()) throw new Error('Company upload control missing');
+            await open('Crew & employees'); body=await page.locator('body').innerText(); if(!/GOOGLE\s*\/\s*WORK EMAIL/i.test(body)) throw new Error('Crew Google/work email missing'); if(!/Senior painter/i.test(body)) throw new Error('Peak painting roles missing'); if(/Senior operator/i.test(body)) throw new Error('Earthworks role leaked into Peak');
+            if(!await page.locator('input[type=email]:visible').count()) throw new Error('Crew Google/work email inputs missing');
+            await open('Integrations'); body=await page.locator('body').innerText(); for(const t of ['Google Calendar','Connect Google Calendar']) if(!body.includes(t)) throw new Error('Integrations missing '+t);
+            await open('Look & feel'); body=await page.locator('body').innerText(); if(!/App colour|Document accent/i.test(body)) throw new Error('Look & Feel colour controls missing'); if(!/Corners/i.test(body)||!/Typeface/i.test(body)) throw new Error('Look & Feel style controls missing');
+            await open('Recently deleted'); body=await page.locator('body').innerText(); if(!/7 days|recovery|deleted/i.test(body)) throw new Error('Recently Deleted content missing');
+            await page.screenshot({path:'peak-live-settings.png',fullPage:true});
+            if(errors.length) throw new Error('Page errors: '+errors.join(' | '));
+            console.log('LIVE_SETTINGS_QA=PASS');
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: peak-live-settings-qa
+          path: peak-live-settings.png
+          if-no-files-found: warn
