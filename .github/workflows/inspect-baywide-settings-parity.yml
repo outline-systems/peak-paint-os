@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect Settings behavior definitions
+      - name: List settings helper methods and anchors
         shell: bash
         run: |
           curl -fsSL https://raw.githubusercontent.com/outline-systems/baywide-dingos-os/main/index.html -o /tmp/baywide.html
@@ -24,18 +24,28 @@ jobs:
           import re
           bay=Path('/tmp/baywide.html').read_text(errors='ignore')
           peak=Path('index.html').read_text(errors='ignore')
-          tokens=['companyLogoUpload','removeCompanyLogo','uploadHsPolicy','hsPolicy','coDraft','saveCompany','crewRows','uploadPhoto','googleEmail','hqTaskRows','newHqTask','addHqTask','checkTaskCal','gcalClientIdV','setGcalClientId','connectGcal','disconnectGcal','reloadGcals','syncGcalAll','toggleGcalAuto','brandColor','setBrandColor','paletteOpts','docColor','setDocColor','toggleDocColorSync','docPaletteOpts','cornerOpts','typeOpts','binRows']
+
+          def methods(text):
+              out=[]
+              for m in re.finditer(r'(?m)^\s{2}([A-Za-z_$][\w$]*)\s*\([^\n{};]*\)\s*\{', text):
+                  out.append((m.group(1),m.start()))
+              return out
+          bm=methods(bay); pm={n for n,_ in methods(peak)}
+          chosen=[]
+          for n,p in bm:
+              nl=n.lower()
+              if any(x in nl for x in ['gcal','companylogo','hspolicy','crewphoto','brandcolor','doccolor','doctheme','retint','crewtask']) or n in ['__applyTheme','readAsDataURL','shrinkImage','fmtKB']:
+                  chosen.append((n,p,n in pm))
+          print('BAYWIDE SETTINGS-RELATED METHODS (exists in Peak?):')
+          for x in chosen: print(x)
+
+          # Print source around important render/setup anchors
           for label,t in [('BAY',bay),('PEAK',peak)]:
-              js_start=t.find('state = {')
-              print(f'===== {label} JS START {js_start} =====')
-              for tok in tokens:
-                  positions=[m.start() for m in re.finditer(re.escape(tok),t)]
-                  jspos=[p for p in positions if p>=js_start]
-                  print(f'\n### {tok} total={len(positions)} js={len(jspos)} firstjs={jspos[0] if jspos else -1}')
-                  for p in jspos[:4]:
-                      a=max(js_start,p-1200); b=min(len(t),p+2800)
-                      s=t[a:b]
-                      # keep source formatting; collapse very long base64-ish strings
-                      s=re.sub(r'data:image/[^;]+;base64,[A-Za-z0-9+/=]{300,}', 'DATA_IMAGE_REDACTED', s)
-                      print(s)
+            print('\n===== '+label+' RENDER/STATE ANCHORS =====')
+            for pat in ['var __coSaved','var __coEdit','coLogoMsg:','crewRows:','gcalClientIdV:','brandColor: this.__brandColor','cornerOpts:','binRows:','__syncKeys()','__mergeState(','__applyTheme()']:
+              ps=[m.start() for m in re.finditer(re.escape(pat),t)]
+              print('\nPAT',pat,'positions',ps[-5:])
+              for p in ps[-2:]:
+                a=max(0,p-1400); b=min(len(t),p+3500)
+                print(t[a:b])
           PY
