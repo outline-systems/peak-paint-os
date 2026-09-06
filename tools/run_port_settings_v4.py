@@ -3,11 +3,9 @@ from pathlib import Path
 src_path = Path('tools/port_baywide_settings_v2.py')
 src = src_path.read_text()
 
-old_pat = "pat = re.compile(r'(?:^|\\n|\\\\n)([ \\t]{2})([A-Za-z_$][\\w$]*)\\s*\\(')"
-new_pat = "pat = re.compile(r'(?:^|\\n|\\\\n)([ \\t]{2,})([A-Za-z_$][\\w$]*)\\s*\\(')"
-if old_pat not in src:
-    raise SystemExit('Expected method parser pattern not found')
-src = src.replace(old_pat, new_pat, 1)
+# Keep the original exact two-space class-method parser. Broadening this to
+# nested indentation causes local functions inside methods to be mistaken for
+# class methods and produces truncated/invalid JavaScript.
 
 old_anchor = """    if 'render' not in cur:
         raise RuntimeError('render() missing while inserting ' + name)
