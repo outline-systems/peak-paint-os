@@ -15,18 +15,22 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect Settings state and draft behavior
+      - name: Inspect Settings accordion bindings
         shell: bash
         run: |
           curl -fsSL https://raw.githubusercontent.com/outline-systems/baywide-dingos-os/main/index.html -o /tmp/baywide.html
           python3 <<'PY'
           from pathlib import Path
           import re
-          for label,path in [('BAY','/tmp/baywide.html'),('PEAK','index.html')]:
-              t=Path(path).read_text(errors='ignore')
-              print('\n===== '+label+' =====')
-              for pat in ['coF =', 'const coF', 'let coF', 'var coF', "co: { name:", 'co: {name:', 'coDraft:', "theme: 'dark'", '__syncKeys()', '__mergeState(']:
-                  ps=[m.start() for m in re.finditer(re.escape(pat),t)]
-                  print('\nPAT',repr(pat),ps[-6:])
-                  for p in ps[-2:]: print(t[max(0,p-1800):min(len(t),p+4000)])
+          t=Path('/tmp/baywide.html').read_text(errors='ignore')
+          for pat in ['hqSetPanels:', 'hqSetPanel:', 'hqCrewPanel:', 'hqIntPanel:', 'hqLookPanel:', 'hqTrashPanel:', 'hqTaskWhoV:', 'hqTaskRows:', 'hsPolicyHas:']:
+              ps=[m.start() for m in re.finditer(re.escape(pat),t)]
+              print('\nPAT',pat,'LAST',ps[-4:])
+              for p in ps[-2:]: print(t[max(0,p-1000):min(len(t),p+5000)])
+          marker='Company details &amp; document template'
+          p=t.find(marker)
+          st=t.rfind('<sc-if value="{{ hqSettings }}">',0,p)
+          en=t.find('<sc-if value="{{ isHQ }}">',p)
+          print('\nSETTINGS BLOCK',st,en,en-st)
+          print(t[st:min(en,st+15000)])
           PY
