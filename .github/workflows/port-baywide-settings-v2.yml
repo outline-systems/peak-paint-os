@@ -1,0 +1,103 @@
+name: Port Baywide Settings v2
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/port-settings-v2.trigger']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch Baywide master
+        run: curl -fsSL https://raw.githubusercontent.com/outline-systems/baywide-dingos-os/main/index.html -o /tmp/baywide.html
+      - name: Patch Peak Settings
+        run: python3 tools/port_baywide_settings.py
+      - name: Static checks
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for f in ['index.html','preview/index.html']:
+              if not Path(f).exists(): continue
+              t=Path(f).read_text(errors='ignore')
+              for s in ['Company details &amp; document template','Connect Google Calendar','Google / work email','Tender H&amp;S policy','Save company details',"ws: 'peak-hb'",'Peak Painting HB SOR 2026']:
+                  assert s in t, (f,s)
+              print(f,'static checks OK')
+          PY
+      - name: Install browser QA
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+      - name: Browser smoke test patched Settings
+        run: |
+          python3 -m http.server 4173 >/tmp/peak-settings-server.log 2>&1 &
+          sleep 2
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const page=await browser.newPage({viewport:{width:1440,height:1100}});
+            const errors=[];
+            page.on('pageerror',e=>errors.push(String(e)));
+            await page.goto('http://127.0.0.1:4173/',{waitUntil:'networkidle'});
+            const mg=page.getByRole('button',{name:/Management/i});
+            if(await mg.count()) await mg.first().click({force:true});
+            await page.waitForTimeout(500);
+            const settings=page.getByRole('button',{name:'Settings',exact:true});
+            if(!await settings.count()) throw new Error('Settings navigation missing');
+            await settings.first().click({force:true});
+            await page.waitForTimeout(700);
+            const body=await page.locator('body').innerText();
+            for(const t of ['Company details & document template','Crew & employees','Integrations','Look & feel','Recently deleted']) if(!body.includes(t)) throw new Error('Missing '+t);
+            const summaries=page.locator('summary:visible');
+            if(await summaries.count()<5) throw new Error('Modular Settings accordions missing');
+            await page.getByText('Company details & document template',{exact:true}).click();
+            await page.waitForTimeout(250);
+            let b=await page.locator('body').innerText();
+            for(const t of ['Company logo','Tender H&S policy','Save company details']) if(!b.includes(t)) throw new Error('Company panel missing '+t);
+            await page.getByText('Crew & employees',{exact:true}).click();
+            await page.waitForTimeout(250);
+            b=await page.locator('body').innerText();
+            for(const t of ['Google / work email','Add employee']) if(!b.includes(t)) throw new Error('Crew panel missing '+t);
+            await page.getByText('Integrations',{exact:true}).click();
+            await page.waitForTimeout(250);
+            b=await page.locator('body').innerText();
+            if(!/Google Calendar/i.test(b)) throw new Error('Google Calendar integration missing');
+            await page.getByText('Look & feel',{exact:true}).click();
+            await page.waitForTimeout(250);
+            b=await page.locator('body').innerText();
+            if(!/Document accent|App colour|Corners|Typeface/i.test(b)) throw new Error('Look & Feel controls missing');
+            await page.getByText('Recently deleted',{exact:true}).click();
+            await page.waitForTimeout(250);
+            await page.screenshot({path:'peak-settings-parity.png',fullPage:true});
+            if(errors.length) throw new Error('Page errors: '+errors.join(' | '));
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: peak-settings-port-smoke
+          path: peak-settings-parity.png
+          if-no-files-found: warn
+      - name: Commit and publish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html preview/index.html
+          if git diff --cached --quiet; then
+            echo 'No app changes to commit'
+          else
+            git commit -m 'Match Peak Settings to Baywide modular UI'
+            git push
+          fi
