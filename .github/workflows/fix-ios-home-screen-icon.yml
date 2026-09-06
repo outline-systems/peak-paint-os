@@ -1,0 +1,64 @@
+name: Fix iOS home screen icon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-ios-home-screen-icon.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-icon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Peak Paint home screen icon and fix project-relative paths
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import base64, json
+
+          icon_b64 = '''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'''
+          Path('apple-touch-icon.png').write_bytes(base64.b64decode(icon_b64))
+          manifest = {
+              'name': 'Peak Paint OS',
+              'short_name': 'Peak Paint',
+              'start_url': './',
+              'scope': './',
+              'display': 'standalone',
+              'background_color': '#0C0D0F',
+              'theme_color': '#0C0D0F',
+              'icons': [{'src':'./apple-touch-icon.png','sizes':'180x180','type':'image/png','purpose':'any maskable'}]
+          }
+          Path('manifest.webmanifest').write_text(json.dumps(manifest, separators=(',',':')))
+          Path('sw.js').write_text("self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));")
+
+          p = Path('index.html')
+          text = p.read_text()
+          text = text.replace('href="/manifest.webmanifest"','href="./manifest.webmanifest"')
+          text = text.replace('href="/apple-touch-icon.png"','href="./apple-touch-icon.png"')
+          text = text.replace('navigator.serviceWorker.register("/sw.js")','navigator.serviceWorker.register("./sw.js")')
+          p.write_text(text)
+
+          preview = Path('preview/index.html')
+          if preview.exists():
+            t = preview.read_text()
+            t = t.replace('href="/manifest.webmanifest"','href="../manifest.webmanifest"')
+            t = t.replace('href="/apple-touch-icon.png"','href="../apple-touch-icon.png"')
+            t = t.replace('navigator.serviceWorker.register("/sw.js")','navigator.serviceWorker.register("../sw.js")')
+            preview.write_text(t)
+          PY
+      - name: Commit and publish
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html preview/index.html apple-touch-icon.png manifest.webmanifest sw.js
+          if ! git diff --cached --quiet; then
+            git commit -m "Fix Peak Paint iOS home screen icon"
+            git push
+          fi
