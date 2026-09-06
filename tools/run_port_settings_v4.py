@@ -7,6 +7,14 @@ src = src_path.read_text()
 # nested indentation causes local functions inside methods to be mistaken for
 # class methods and produces truncated/invalid JavaScript.
 
+# Baywide's Settings markup contains trade-specific crew-role labels. Preserve
+# the Peak painting equivalents while copying the UI and behavior.
+role_anchor = "        ('Baywide Blue', 'Peak Blue'),\n"
+role_replacement = role_anchor + "        ('Senior operator', 'Senior painter'),\n        ('Operator', 'Painter'),\n"
+if role_anchor not in src:
+    raise SystemExit('Expected Settings trade-role adaptation anchor not found')
+src = src.replace(role_anchor, role_replacement, 1)
+
 old_anchor = """    if 'render' not in cur:
         raise RuntimeError('render() missing while inserting ' + name)
     a = cur['render'][0]
