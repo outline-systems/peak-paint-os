@@ -21,7 +21,7 @@ jobs:
       - name: Fetch Baywide master
         run: curl -fsSL https://raw.githubusercontent.com/outline-systems/baywide-dingos-os/main/index.html -o /tmp/baywide.html
       - name: Patch Peak Settings
-        run: python3 tools/run_port_settings_v3.py
+        run: python3 tools/run_port_settings_v4.py
       - name: Static checks
         run: |
           python3 - <<'PY'
@@ -48,33 +48,20 @@ jobs:
           (async()=>{
             const browser=await chromium.launch({headless:true});
             const page=await browser.newPage({viewport:{width:1440,height:1100}});
-            const errors=[];
-            page.on('pageerror',e=>errors.push(String(e)));
+            const errors=[]; page.on('pageerror',e=>errors.push(String(e)));
             await page.goto('http://127.0.0.1:4173/',{waitUntil:'networkidle'});
-            const mg=page.getByRole('button',{name:/Management/i});
-            if(await mg.count()) await mg.first().click({force:true});
+            const mg=page.getByRole('button',{name:/Management/i}); if(await mg.count()) await mg.first().click({force:true});
             await page.waitForTimeout(500);
-            const settings=page.getByRole('button',{name:'Settings',exact:true});
-            if(!await settings.count()) throw new Error('Settings navigation missing');
-            await settings.first().click({force:true});
-            await page.waitForTimeout(700);
+            const settings=page.getByRole('button',{name:'Settings',exact:true}); if(!await settings.count()) throw new Error('Settings navigation missing');
+            await settings.first().click({force:true}); await page.waitForTimeout(700);
             const body=await page.locator('body').innerText();
             for(const t of ['Company details & document template','Crew & employees','Integrations','Look & feel','Recently deleted']) if(!body.includes(t)) throw new Error('Missing '+t);
             const openSummary=async(name)=>{const s=page.locator('summary:visible').filter({hasText:name}); if(!await s.count()) throw new Error('Missing accordion '+name); await s.first().click({force:true}); await page.waitForTimeout(220);};
-            await openSummary('Company details & document template');
-            let b=await page.locator('body').innerText();
-            for(const t of ['Company logo','Tender H&S policy','Save company details']) if(!b.includes(t)) throw new Error('Company panel missing '+t);
-            await openSummary('Crew & employees');
-            b=await page.locator('body').innerText();
-            for(const t of ['Google / work email','Add employee']) if(!b.includes(t)) throw new Error('Crew panel missing '+t);
-            await openSummary('Integrations');
-            b=await page.locator('body').innerText();
-            if(!/Google Calendar/i.test(b)) throw new Error('Google Calendar integration missing');
-            await openSummary('Look & feel');
-            b=await page.locator('body').innerText();
-            if(!/Document accent|App colour|Corners|Typeface/i.test(b)) throw new Error('Look & Feel controls missing');
-            await openSummary('Recently deleted');
-            await page.waitForTimeout(220);
+            await openSummary('Company details & document template'); let b=await page.locator('body').innerText(); for(const t of ['Company logo','Tender H&S policy','Save company details']) if(!b.includes(t)) throw new Error('Company panel missing '+t);
+            await openSummary('Crew & employees'); b=await page.locator('body').innerText(); for(const t of ['Google / work email','Add employee']) if(!b.includes(t)) throw new Error('Crew panel missing '+t);
+            await openSummary('Integrations'); b=await page.locator('body').innerText(); if(!/Google Calendar/i.test(b)) throw new Error('Google Calendar integration missing');
+            await openSummary('Look & feel'); b=await page.locator('body').innerText(); if(!/Document accent|App colour|Corners|Typeface/i.test(b)) throw new Error('Look & Feel controls missing');
+            await openSummary('Recently deleted'); await page.waitForTimeout(220);
             await page.screenshot({path:'peak-settings-parity.png',fullPage:true});
             if(errors.length) throw new Error('Page errors: '+errors.join(' | '));
             await browser.close();
