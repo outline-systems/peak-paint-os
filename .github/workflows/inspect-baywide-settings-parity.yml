@@ -15,62 +15,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch Baywide source and inspect Settings behavior
+      - name: Inspect transplant anchors
         shell: bash
         run: |
           curl -fsSL https://raw.githubusercontent.com/outline-systems/baywide-dingos-os/main/index.html -o /tmp/baywide.html
           python3 <<'PY'
           from pathlib import Path
-          import re, json
-          bay=Path('/tmp/baywide.html').read_text(errors='ignore')
-          peak=Path('index.html').read_text(errors='ignore')
-
-          def method_names(text):
-              # class-style method declarations only
-              names=[]
-              for m in re.finditer(r'(?m)^\s{2}([A-Za-z_$][\w$]*)\s*\([^\n{};]*\)\s*\{',text):
-                  names.append(m.group(1))
-              return names
-
-          bmethods=set(method_names(bay)); pmethods=set(method_names(peak))
-          interesting=lambda n: any(x in n.lower() for x in ['gcal','calendar','crew','task','company','logo','policy','bin','recycle','brand','corner','typeface','font','project','proj'])
-          missing=sorted(n for n in bmethods-pmethods if interesting(n))
-          common=sorted(n for n in bmethods & pmethods if interesting(n))
-
-          keys=['gcal','hqTask','crewPhotos','photo','coDraft','coLogoMsg','coPolicyMsg','hsPolicy','brandColor','docColor','cornerStyle','typeStyle','recycle','tombstones','jobRelease','projSchedule','projectSchedule']
-          counts={}
-          for k in keys:
-              counts[k]={'baywide':len(re.findall(re.escape(k),bay,re.I)),'peak':len(re.findall(re.escape(k),peak,re.I))}
-
-          # Locate modular settings blocks.
-          def settings_block(text):
-              needle='Company details &amp; document template'
-              pos=text.find(needle)
-              if pos<0: return None
-              start=text.rfind('<sc-if value="{{ hqSettings }}">',0,pos)
-              end=text.find('<sc-if value="{{ isHQ }}">',pos)
-              if start<0 or end<0: return None
-              return text[start:end]
-          bb=settings_block(bay); pb=settings_block(peak)
-          tokens=sorted(set(re.findall(r'\{\{\s*([A-Za-z_$][\w$]*)\s*\}\}',bb or '')))
-          missing_tokens=[]
-          for t in tokens:
-              # crude but useful: is token name referenced elsewhere in Peak JS/template?
-              if peak.count(t)==0: missing_tokens.append(t)
-
-          report={
-            'bay_len':len(bay),'peak_len':len(peak),
-            'bay_settings_block_len':len(bb or ''),'peak_modular_settings_block_len':len(pb or ''),
-            'missing_interesting_methods':missing,
-            'common_interesting_method_count':len(common),
-            'counts':counts,
-            'settings_token_count':len(tokens),
-            'settings_tokens_missing_entirely_from_peak':missing_tokens,
-          }
-          print(json.dumps(report,indent=2))
-          Path('settings-behavior-report.json').write_text(json.dumps(report,indent=2))
+          import re
+          for label,path in [('BAY','/tmp/baywide.html'),('PEAK','index.html')]:
+            t=Path(path).read_text(errors='ignore')
+            print('\n====',label,'len',len(t),'====')
+            for pat in ['hqSettings','Company details &amp; document template','Company details','gcalClientId','gcalClientIdV','connectGcal','hqTaskWho','crewRows','brandColor','binRows','class ','constructor(','this.state =','state = {']:
+              pos=t.find(pat)
+              print('\nPAT',pat,'POS',pos)
+              if pos>=0:
+                a=max(0,pos-1800); b=min(len(t),pos+4200)
+                print(t[a:b].replace('\n','\\n'))
           PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: settings-parity-behavior-inspection
-          path: settings-behavior-report.json
