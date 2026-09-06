@@ -1,0 +1,28 @@
+name: Inspect Peak render anchor
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-render.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print render anchors
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          t=Path('index.html').read_text(errors='ignore')
+          for pat in ['render()','render (','render(',' render','\\n  render','\\n    render','\\n      render']:
+              ps=[m.start() for m in re.finditer(re.escape(pat),t)]
+              print('\nPAT',repr(pat),'COUNT',len(ps),'LAST',ps[-20:])
+              for p in ps[-5:]:
+                  print('---',p,'---')
+                  print(repr(t[max(0,p-500):min(len(t),p+1000)]))
+          PY
