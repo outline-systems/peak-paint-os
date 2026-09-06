@@ -21,7 +21,7 @@ jobs:
       - name: Fetch Baywide master
         run: curl -fsSL https://raw.githubusercontent.com/outline-systems/baywide-dingos-os/main/index.html -o /tmp/baywide.html
       - name: Patch Peak Settings
-        run: python3 tools/port_baywide_settings.py
+        run: python3 tools/port_baywide_settings_v2.py
       - name: Static checks
         run: |
           python3 - <<'PY'
