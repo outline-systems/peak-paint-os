@@ -21,7 +21,7 @@ jobs:
       - name: Fetch Baywide master
         run: curl -fsSL https://raw.githubusercontent.com/outline-systems/baywide-dingos-os/main/index.html -o /tmp/baywide.html
       - name: Patch Peak Settings
-        run: python3 tools/port_baywide_settings_v2.py
+        run: python3 tools/run_port_settings_v3.py
       - name: Static checks
         run: |
           python3 - <<'PY'
@@ -31,6 +31,7 @@ jobs:
               t=Path(f).read_text(errors='ignore')
               for s in ['Company details &amp; document template','Connect Google Calendar','Google / work email','Tender H&amp;S policy','Save company details',"ws: 'peak-hb'",'Peak Painting HB SOR 2026']:
                   assert s in t, (f,s)
+              assert "ws: 'baywide-dingos-os'" not in t
               print(f,'static checks OK')
           PY
       - name: Install browser QA
@@ -59,26 +60,21 @@ jobs:
             await page.waitForTimeout(700);
             const body=await page.locator('body').innerText();
             for(const t of ['Company details & document template','Crew & employees','Integrations','Look & feel','Recently deleted']) if(!body.includes(t)) throw new Error('Missing '+t);
-            const summaries=page.locator('summary:visible');
-            if(await summaries.count()<5) throw new Error('Modular Settings accordions missing');
-            await page.getByText('Company details & document template',{exact:true}).click();
-            await page.waitForTimeout(250);
+            const openSummary=async(name)=>{const s=page.locator('summary:visible').filter({hasText:name}); if(!await s.count()) throw new Error('Missing accordion '+name); await s.first().click({force:true}); await page.waitForTimeout(220);};
+            await openSummary('Company details & document template');
             let b=await page.locator('body').innerText();
             for(const t of ['Company logo','Tender H&S policy','Save company details']) if(!b.includes(t)) throw new Error('Company panel missing '+t);
-            await page.getByText('Crew & employees',{exact:true}).click();
-            await page.waitForTimeout(250);
+            await openSummary('Crew & employees');
             b=await page.locator('body').innerText();
             for(const t of ['Google / work email','Add employee']) if(!b.includes(t)) throw new Error('Crew panel missing '+t);
-            await page.getByText('Integrations',{exact:true}).click();
-            await page.waitForTimeout(250);
+            await openSummary('Integrations');
             b=await page.locator('body').innerText();
             if(!/Google Calendar/i.test(b)) throw new Error('Google Calendar integration missing');
-            await page.getByText('Look & feel',{exact:true}).click();
-            await page.waitForTimeout(250);
+            await openSummary('Look & feel');
             b=await page.locator('body').innerText();
             if(!/Document accent|App colour|Corners|Typeface/i.test(b)) throw new Error('Look & Feel controls missing');
-            await page.getByText('Recently deleted',{exact:true}).click();
-            await page.waitForTimeout(250);
+            await openSummary('Recently deleted');
+            await page.waitForTimeout(220);
             await page.screenshot({path:'peak-settings-parity.png',fullPage:true});
             if(errors.length) throw new Error('Page errors: '+errors.join(' | '));
             await browser.close();
