@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: List settings helper methods and anchors
+      - name: List Settings helper signatures
         shell: bash
         run: |
           curl -fsSL https://raw.githubusercontent.com/outline-systems/baywide-dingos-os/main/index.html -o /tmp/baywide.html
@@ -24,28 +24,18 @@ jobs:
           import re
           bay=Path('/tmp/baywide.html').read_text(errors='ignore')
           peak=Path('index.html').read_text(errors='ignore')
-
-          def methods(text):
-              out=[]
-              for m in re.finditer(r'(?m)^\s{2}([A-Za-z_$][\w$]*)\s*\([^\n{};]*\)\s*\{', text):
-                  out.append((m.group(1),m.start()))
-              return out
-          bm=methods(bay); pm={n for n,_ in methods(peak)}
-          chosen=[]
-          for n,p in bm:
-              nl=n.lower()
-              if any(x in nl for x in ['gcal','companylogo','hspolicy','crewphoto','brandcolor','doccolor','doctheme','retint','crewtask']) or n in ['__applyTheme','readAsDataURL','shrinkImage','fmtKB']:
-                  chosen.append((n,p,n in pm))
-          print('BAYWIDE SETTINGS-RELATED METHODS (exists in Peak?):')
-          for x in chosen: print(x)
-
-          # Print source around important render/setup anchors
-          for label,t in [('BAY',bay),('PEAK',peak)]:
-            print('\n===== '+label+' RENDER/STATE ANCHORS =====')
-            for pat in ['var __coSaved','var __coEdit','coLogoMsg:','crewRows:','gcalClientIdV:','brandColor: this.__brandColor','cornerOpts:','binRows:','__syncKeys()','__mergeState(','__applyTheme()']:
-              ps=[m.start() for m in re.finditer(re.escape(pat),t)]
-              print('\nPAT',pat,'positions',ps[-5:])
-              for p in ps[-2:]:
-                a=max(0,p-1400); b=min(len(t),p+3500)
-                print(t[a:b])
+          names=set()
+          for m in re.finditer(r'(?<![\.\w])([A-Za-z_$][\w$]*)\s*\(([^()]|\([^()]*\))*\)\s*\{',bay):
+              n=m.group(1)
+              if any(x in n.lower() for x in ['gcal','companylogo','hspolicy','crewphoto','brandcolor','doccolor','doctheme','retint','crewtask']) or n in ['__applyTheme','readAsDataURL','shrinkImage','fmtKB','__mixHex']:
+                  names.add(n)
+          print('METHODS',sorted(names))
+          for n in sorted(names):
+              print(n,'peak_has=', bool(re.search(r'(?<![\.\w])'+re.escape(n)+r'\s*\(',peak)))
+          # exact positions of key helpers, plus 2k around each
+          for n in sorted(names):
+              pos=bay.find(n+'(')
+              if pos>=0:
+                  print('\n---',n,'@',pos,'---')
+                  print(bay[max(0,pos-300):min(len(bay),pos+1800)])
           PY
