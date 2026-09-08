@@ -1,0 +1,75 @@
+name: One-shot full Baywide parity sync
+
+on:
+  push:
+    paths:
+      - '.github/workflows/full-baywide-parity-sync.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Peak
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Baywide source of truth
+        run: git clone --quiet https://github.com/outline-systems/baywide-dingos-os.git /tmp/baywide
+
+      - name: Apply Baywide shared revisions to Peak
+        run: |
+          python3 tools/sync_full_baywide_parity.py \
+            --peak index.html \
+            --preview preview/index.html \
+            --baywide-repo /tmp/baywide \
+            --baywide-base 261cc05295f2f86b7ecac9d2bab23e0b7dbff746
+
+      - name: Verify Peak and preview are identical and trade content survived
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main = Path('index.html').read_text(encoding='utf-8')
+          preview = Path('preview/index.html').read_text(encoding='utf-8')
+          assert main == preview, 'preview/index.html does not match main index.html'
+          required = [
+              'Peak Paint',
+              'Painting & Decorating',
+              'rateExteriorWalls',
+              'rateCeilings',
+              'rateDoors',
+              'Google Calendar',
+              'Recently deleted',
+              'Progress Claims',
+              'Tax Invoices',
+              'data-settings-tab="company"',
+              'data-settings-tab="crew"',
+              'data-settings-tab="integrations"',
+              'data-settings-tab="look"',
+              'data-settings-tab="deleted"',
+          ]
+          missing = [x for x in required if x.lower() not in main.lower()]
+          assert not missing, f'Missing required parity markers: {missing}'
+          forbidden = ['Baywide Dingos', 'BAYWIDE DINGOS', 'baywide-dingos']
+          leaked = [x for x in forbidden if x.lower() in main.lower()]
+          assert not leaked, f'Baywide company branding leaked into Peak: {leaked}'
+          assert '<<<<<<<' not in main and '>>>>>>>' not in main and '|||||||' not in main
+          print(f'QA PASS: {len(main):,} characters')
+          PY
+          git diff --check
+
+      - name: Commit synchronized Peak app and remove one-shot runner
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm --ignore-unmatch .github/workflows/full-baywide-parity-sync.yml
+          git add index.html preview/index.html
+          if git diff --cached --quiet; then
+            echo 'No shared Baywide app changes were required.'
+            exit 0
+          fi
+          git commit -m 'Sync Peak with latest Baywide shared OS revision'
+          git push
